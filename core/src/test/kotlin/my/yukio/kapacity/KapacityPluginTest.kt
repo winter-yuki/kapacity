@@ -5,7 +5,6 @@ import com.tschuchort.compiletesting.KotlinCompilation.ExitCode
 import com.tschuchort.compiletesting.SourceFile
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-import kotlin.jvm.internal.DefaultConstructorMarker
 
 class KapacityPluginTest {
     private fun compile(vararg sources: SourceFile): KotlinCompilation.Result =
@@ -19,16 +18,17 @@ class KapacityPluginTest {
         }
 
     private fun KotlinCompilation.Result.shallowSize(
-        classname: String, nCtorArgs: Int
+        className: String, nCtorArgs: Int, classPackage: String = ""
     ): Int {
-        val klassKt = classLoader.loadClass(classname + "Kt")
+        val klassKtName = if (classPackage.isEmpty()) "${className}Kt" else "${classPackage}.${className}Kt"
+        val klassKt = classLoader.loadClass(klassKtName)
         val method = klassKt.methods.find { it.name == "getShallowSize" }!!
-        val klass = classLoader.loadClass(classname)
+        val klassName = if (classPackage.isEmpty()) className else "${classPackage}.${className}"
+        val klass = classLoader.loadClass(klassName)
         val ctor = klass.getDeclaredConstructor(
-            *List(nCtorArgs + 1) { Int::class.java }.toTypedArray(),
-            DefaultConstructorMarker::class.java
+            *List(nCtorArgs) { Int::class.java }.toTypedArray()
         )
-        val instance = ctor.newInstance(*List(nCtorArgs + 1) { 42 }.toTypedArray(), null)
+        val instance = ctor.newInstance(*List(nCtorArgs) { 42 }.toTypedArray())
         return method(null, instance) as Int
     }
 
@@ -41,7 +41,7 @@ class KapacityPluginTest {
     fun `basic test`() {
         val source = SourceFile.kotlin(
             "Klass.kt", """
-                data class Klass(val x: Int = 42)
+                data class Klass(val x: Int)
             """.trimIndent()
         )
         compile(source).run {
@@ -50,14 +50,14 @@ class KapacityPluginTest {
     }
 
     @Test
-    fun `basic test 2`() {
+    fun `many ctor args`() {
         val source = SourceFile.kotlin(
             "File.kt", """
-                data class Klass(val x: Int = 42)
+                data class Klass(val x: Int, val y: Int, val z: Int)
             """.trimIndent()
         )
         compile(source).run {
-            1 fields shallowSize("Klass", 1)
+            3 fields shallowSize("Klass", 3)
         }
     }
 
@@ -65,13 +65,54 @@ class KapacityPluginTest {
     fun `two data classes`() {
         val source = SourceFile.kotlin(
             "File.kt", """
-                |data class A(val x: Int = 1, val y: Int = 2)
-                |data class B(val x: Int = 1)
+                |data class A(val x: Int, val y: Int)
+                |data class B(val x: Int)
             """.trimMargin()
         )
         compile(source).run {
             2 fields shallowSize("A", 2)
             1 fields shallowSize("B", 1)
+        }
+    }
+
+    @Test
+    fun `many sources`() {
+        val source1 = SourceFile.kotlin(
+            "File1.kt", """
+                |data class A(val x: Int, val y: Int)
+                |data class B(val x: Int)
+            """.trimMargin()
+        )
+        val source2 = SourceFile.kotlin(
+            "File2.kt", """
+                |data class C(val x: Int, val y: Int, val z: Int)
+            """.trimMargin()
+        )
+        compile(source1, source2).run {
+            2 fields shallowSize("A", 2)
+            1 fields shallowSize("B", 1)
+            3 fields shallowSize("C", 3)
+        }
+    }
+
+    @Test
+    fun `many packages`() {
+        val source1 = SourceFile.kotlin(
+            "File1.kt", """
+                |data class A(val x: Int, val y: Int)
+                |data class B(val x: Int)
+            """.trimMargin()
+        )
+        val source2 = SourceFile.kotlin(
+            "File2.kt", """
+                |package other
+                |data class A(val x: Int, val y: Int)
+            """.trimMargin()
+        )
+        compile(source1, source2).run {
+            2 fields shallowSize("A", 2)
+            1 fields shallowSize("B", 1)
+            2 fields shallowSize("A", 2, classPackage = "other")
         }
     }
 }
