@@ -3,10 +3,13 @@ package my.yukio.kapacity
 import com.tschuchort.compiletesting.KotlinCompilation
 import com.tschuchort.compiletesting.KotlinCompilation.ExitCode
 import com.tschuchort.compiletesting.SourceFile
+import org.intellij.lang.annotations.Language
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class KapacityPluginTest {
+    private val fieldSize = 8
+
     private fun compile(vararg sources: SourceFile): KotlinCompilation.Result =
         KotlinCompilation().apply {
             this.sources = sources.toList()
@@ -33,8 +36,17 @@ class KapacityPluginTest {
     }
 
     private infix fun Int.fields(size: Int) {
-        val fieldSize = 8
         assertEquals(this * fieldSize, size)
+    }
+
+    /**
+     * Not infix because highlighting did not work for the infix syntax.
+     */
+    private fun Int.fields(@Language("kotlin") code: String) {
+        val source = SourceFile.kotlin("File.kt", code)
+        compile(source).run {
+            this@fields fields shallowSize("A", 1)
+        }
     }
 
     @Test
@@ -114,5 +126,49 @@ class KapacityPluginTest {
             1 fields shallowSize("B", 1)
             2 fields shallowSize("A", 2, classPackage = "other")
         }
+    }
+
+    @Test
+    fun `val with backing`() {
+        2.fields(
+            """
+            |data class A(val x: Int) {
+            |    val answer: Int
+            |        get() = 42
+            |    val assigned: Int = 12        
+            |}
+            """.trimMargin()
+        )
+    }
+
+    @Test
+    fun `default field accessor`() {
+        4.fields(
+            """
+            |data class A(val x: Int) {
+            |    var _a = 1
+            |    var a: Int = 0
+            |        set(value) { _a = 1 }
+            |        
+            |    var b: Int = 42
+            |        get() = _a   
+            |}
+            """.trimMargin()
+        )
+    }
+
+    @Test
+    fun `no backing fields`() {
+        1.fields(
+            """
+            |data class A(var x: Int) {
+            |    val a: Int
+            |        get() = x
+            |    var b: Int
+            |        get() = x
+            |        set(value) { x = value }            
+            |}
+            """.trimMargin()
+        )
     }
 }

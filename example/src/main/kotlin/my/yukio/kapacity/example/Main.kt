@@ -1,8 +1,12 @@
 package my.yukio.kapacity.example
 
 import my.yukio.kapacity.example.shallowSize
+import my.yukio.kapacity.example.packag.shallowSize
+import my.yukio.kapacity.example.packag.A as AA
 
-data class Tmp(val x: Int = 0) {
+data class A(val x: Int = 1, val y: Long = 2)
+
+data class B(val x: Int = 0) {
     val y: Int
         get() = 42
 
@@ -10,9 +14,8 @@ data class Tmp(val x: Int = 0) {
         get() = 10
 }
 
-data class Q(val x: Int = 1, val y: Long = 2)
-
 fun main() {
-    println(Tmp().shallowSize)
-    println(Q().shallowSize)
+    println(A().shallowSize)
+    println(B().shallowSize)
+    println(AA(42).shallowSize)
 }

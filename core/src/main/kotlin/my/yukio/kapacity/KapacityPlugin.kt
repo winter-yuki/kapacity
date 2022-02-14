@@ -6,6 +6,7 @@ import arrow.meta.invoke
 import arrow.meta.quotes.Transform
 import arrow.meta.quotes.classDeclaration
 import org.jetbrains.kotlin.psi.KtClass
+import org.jetbrains.kotlin.psi.KtProperty
 import java.io.File
 
 val Meta.addShallowSize: CliPlugin
@@ -27,12 +28,13 @@ val Meta.addShallowSize: CliPlugin
         meta(classesExtensionPhase)
     }
 
+private val KtProperty.hasBackingField: Boolean
+    get() = hasInitializer()
+
 private val KtClass.nBackingFields: Int
     get() {
-        val nCtorBackingFields = primaryConstructorParameters.count { it.hasValOrVar() }
-        val nPropsBackingFields = getProperties().count {
-            it.isLocal && it.getter != null && it.setter != null
-        }
+        val nCtorBackingFields = primaryConstructorParameters.size
+        val nPropsBackingFields = getProperties().count { it.hasBackingField }
         return nCtorBackingFields + nPropsBackingFields
     }
 
