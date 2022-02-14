@@ -19,22 +19,22 @@ class KapacityPluginTest {
         }
 
     private fun KotlinCompilation.Result.shallowSize(
-        filename: String, classname: String, vararg ctorParams: Pair<Class<*>, *>
+        classname: String, nCtorArgs: Int
     ): Int {
-        val klassKt = classLoader.loadClass(filename)
+        val klassKt = classLoader.loadClass(classname + "Kt")
         val method = klassKt.methods.find { it.name == "getShallowSize" }!!
         val klass = classLoader.loadClass(classname)
-        val ctor = klass.getConstructor(
-            *ctorParams.map { it.first }.toTypedArray(), Int::class.java,
+        val ctor = klass.getDeclaredConstructor(
+            *List(nCtorArgs + 1) { Int::class.java }.toTypedArray(),
             DefaultConstructorMarker::class.java
         )
-        val instance = ctor.newInstance(*ctorParams.map { it.second }.toTypedArray(), 42, null)
+        val instance = ctor.newInstance(*List(nCtorArgs + 1) { 42 }.toTypedArray(), null)
         return method(null, instance) as Int
     }
 
-    private infix fun Int.has(n: Int) {
+    private infix fun Int.fields(size: Int) {
         val fieldSize = 8
-        assertEquals(n * fieldSize, this)
+        assertEquals(this * fieldSize, size)
     }
 
     @Test
@@ -45,10 +45,7 @@ class KapacityPluginTest {
             """.trimIndent()
         )
         compile(source).run {
-            shallowSize(
-                "KlassKt", "Klass",
-                Int::class.java to 1
-            ) has 1
+            1 fields shallowSize("Klass", 1)
         }
     }
 
@@ -60,10 +57,7 @@ class KapacityPluginTest {
             """.trimIndent()
         )
         compile(source).run {
-            shallowSize(
-                "KlassKt", "Klass",
-                Int::class.java to 1
-            ) has 1
+            1 fields shallowSize("Klass", 1)
         }
     }
 
@@ -71,19 +65,13 @@ class KapacityPluginTest {
     fun `two data classes`() {
         val source = SourceFile.kotlin(
             "File.kt", """
-                |data class A(val x: Int)
-//                |data class B(val x: List<Int>)
+                |data class A(val x: Int = 1, val y: Int = 2)
+                |data class B(val x: Int = 1)
             """.trimMargin()
         )
         compile(source).run {
-            shallowSize(
-                "AKt", "A",
-                Int::class.java to 1, // Double::class.java to 2.0
-            ) has 2
-//            shallowSize(
-//                "FileKt", "B",
-//                List::class.java to listOf(1)
-//            ) has 1
+            2 fields shallowSize("A", 2)
+            1 fields shallowSize("B", 1)
         }
     }
 }
