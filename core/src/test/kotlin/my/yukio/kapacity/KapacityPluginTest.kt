@@ -10,14 +10,22 @@ import org.junit.jupiter.api.Test
 class KapacityPluginTest {
     private val bytesInField = 8
 
-    private fun compile(vararg sources: SourceFile): KotlinCompilation.Result =
+    private fun compilation(vararg sources: SourceFile): KotlinCompilation =
         KotlinCompilation().apply {
             this.sources = sources.toList()
             compilerPlugins = listOf(MetaKapacity())
             inheritClassPath = true
             messageOutputStream = System.out
-        }.compile().also { result ->
-            assertEquals(ExitCode.OK, result.exitCode, result.messages)
+        }
+
+    private fun compileOk(vararg sources: SourceFile): KotlinCompilation.Result =
+        compilation(*sources).compile().apply {
+            assertEquals(ExitCode.OK, exitCode, messages)
+        }
+
+    private fun compileError(vararg sources: SourceFile): KotlinCompilation.Result =
+        compilation(*sources).compile().apply {
+            assertEquals(ExitCode.COMPILATION_ERROR, exitCode, messages)
         }
 
     private fun KotlinCompilation.Result.shallowSize(
@@ -40,11 +48,11 @@ class KapacityPluginTest {
     }
 
     /**
-     * Not infix because IDEA highlighting did not work for the infix syntax.
+     * Not infix because IDEA highlighting did not work for the infix syntax at the moment of writing.
      */
     private fun Int.fields(@Language("kotlin") code: String) {
         val source = SourceFile.kotlin("File.kt", code)
-        compile(source).run {
+        compileOk(source).run {
             this@fields fields shallowSize("A", 1)
         }
     }
@@ -56,7 +64,7 @@ class KapacityPluginTest {
                 data class Klass(val x: Int)
             """.trimIndent()
         )
-        compile(source).run {
+        compileOk(source).run {
             1 fields shallowSize("Klass", 1)
         }
     }
@@ -68,7 +76,7 @@ class KapacityPluginTest {
                 data class Klass(val x: Int, val y: Int, val z: Int)
             """.trimIndent()
         )
-        compile(source).run {
+        compileOk(source).run {
             3 fields shallowSize("Klass", 3)
         }
     }
@@ -81,7 +89,7 @@ class KapacityPluginTest {
                 |data class B(val x: Int)
             """.trimMargin()
         )
-        compile(source).run {
+        compileOk(source).run {
             2 fields shallowSize("A", 2)
             1 fields shallowSize("B", 1)
         }
@@ -100,7 +108,7 @@ class KapacityPluginTest {
                 |data class C(val x: Int, val y: Int, val z: Int)
             """.trimMargin()
         )
-        compile(source1, source2).run {
+        compileOk(source1, source2).run {
             2 fields shallowSize("A", 2)
             1 fields shallowSize("B", 1)
             3 fields shallowSize("C", 3)
@@ -121,7 +129,7 @@ class KapacityPluginTest {
                 |data class A(val x: Int, val y: Int)
             """.trimMargin()
         )
-        compile(source1, source2).run {
+        compileOk(source1, source2).run {
             2 fields shallowSize("A", 2)
             1 fields shallowSize("B", 1)
             2 fields shallowSize("A", 2, classPackage = "other")
@@ -141,6 +149,10 @@ class KapacityPluginTest {
         )
     }
 
+    @Suppress(
+        "PropertyName", "SetterBackingFieldAssignment",
+        "MemberVisibilityCanBePrivate", "SuspiciousVarProperty"
+    )
     @Test
     fun `default field accessor`() {
         4.fields(
@@ -170,5 +182,106 @@ class KapacityPluginTest {
             |}
             """.trimMargin()
         )
+    }
+
+    @Test
+    fun `non-data classes`() {
+        val source = SourceFile.kotlin(
+            "File.kt", """
+                |class C
+                |
+                |fun test() {
+                |    println(C().shallowSize)
+                |}
+            """.trimMargin()
+        )
+        compileError(source)
+    }
+
+    @Test
+    fun `data nested in non-data`() {
+        val source1 = SourceFile.kotlin(
+            "File.kt", """
+                |import c.shallowSize
+                |
+                |class C {
+                |    data class D(val x: Int, var y: Int)
+                |}
+                |
+                |fun test() {
+                |    C.D(1, 2).shallowSize
+                |}    
+            """.trimMargin()
+        )
+        compileOk(source1)
+        val source2 = SourceFile.kotlin(
+            "File.kt", """
+                |class C {
+                |    data class D(val x: Int, var y: Int)
+                |}
+                |
+                |fun test() {
+                |    C().shallowSize
+                |}    
+            """.trimMargin()
+        )
+        compileError(source2)
+    }
+
+    @Test
+    fun `data nested in data`() {
+        val source = SourceFile.kotlin(
+            "File.kt", """
+                |import c.shallowSize
+                |
+                |data class C(var x: Int = 0) {
+                |    data class D(val x: Int, var y: Int)
+                |}
+                |
+                |fun test() {
+                |    C().shallowSize
+                |    C.D(1, 2).shallowSize
+                |}    
+            """.trimMargin()
+        )
+        compileOk(source)
+    }
+
+    @Test
+    fun `non-data nested in data`() {
+        val source = SourceFile.kotlin(
+            "File.kt", """
+                |import c.shallowSize
+                |
+                |data class C(var x: Int) {
+                |    class D(val x: Int, var y: Int)
+                |}
+                |
+                |fun test() {
+                |    C().shallowSize
+                |    C.D(1, 2).shallowSize
+                |}    
+            """.trimMargin()
+        )
+        compileError(source)
+    }
+
+    @Test
+    fun `nested data same names`() {
+        val source = SourceFile.kotlin(
+            "File.kt", """
+                |import d.shallowSize
+                |
+                |data class D(var x: Int) {
+                |    data class D(val x: Int, var y: Int)
+                |}
+                |
+                |fun test() {
+                |    D(1).shallowSize
+                |    D.D(1, 2).shallowSize
+                |}    
+            """.trimMargin()
+        )
+        compileOk(source)
     }
 }
