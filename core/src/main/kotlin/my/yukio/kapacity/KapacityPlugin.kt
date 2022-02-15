@@ -11,7 +11,7 @@ val Meta.addShallowSize: CliPlugin
     get() = "Add shallow size to the data classes" {
         val classesExtensionPhase = classDeclaration(this, { element.isData() && element.isTopLevel() }) {
             val classPackage = value.fqName?.parent()?.toString() ?: ""
-            val className = name?.identifier ?: error("")
+            val className = name?.identifier ?: error("Class name does not exist")
             val bytesInField = 8
             val fileContent = genFileContent(classPackage, className, value.nBackingFields * bytesInField)
             val file = fileContent.file(
