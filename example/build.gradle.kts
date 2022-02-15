@@ -19,3 +19,7 @@ tasks.withType<KotlinCompile>().all {
         )
     }
 }
+
+application {
+    mainClass.set("my.yukio.kapacity.example.MainKt")
+}
