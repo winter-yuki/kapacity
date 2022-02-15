@@ -12,12 +12,14 @@ Kotlin 1.5.0 is supported.
 2. Add compiler option in `build.gradle.kts`:
 
 ```kotlin
-kotlinOptions {
-    freeCompilerArgs = listOf(
-        "-Xplugin=/path/to/core-1.0-SNAPSHOT.jar",
-        "-P",
-        "plugin:arrow.meta.plugin.compiler:generatedSrcOutputDir=${buildDir}"
-    )
+tasks.withType<KotlinCompile>().all {
+    kotlinOptions {
+        freeCompilerArgs = listOf(
+            "-Xplugin=/path/to/core-1.0-SNAPSHOT.jar",
+            "-P",
+            "plugin:arrow.meta.plugin.compiler:generatedSrcOutputDir=${buildDir}"
+        )
+    }
 }
 ```
 
