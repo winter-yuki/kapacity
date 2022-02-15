@@ -5,8 +5,6 @@ import arrow.meta.Meta
 import arrow.meta.invoke
 import arrow.meta.quotes.Transform
 import arrow.meta.quotes.classDeclaration
-import org.jetbrains.kotlin.psi.KtClass
-import org.jetbrains.kotlin.psi.KtProperty
 import java.io.File
 
 val Meta.addShallowSize: CliPlugin
@@ -20,7 +18,7 @@ val Meta.addShallowSize: CliPlugin
                 fileName = "${className}.kt",
                 filePath = classPackage
                     .split('.')
-                    .filter { it.isNotRoot }
+                    .filter { it.isNotRootPackage }
                     .joinToString(File.separatorChar.toString())
             )
             Transform.newSources(file)
@@ -28,28 +26,12 @@ val Meta.addShallowSize: CliPlugin
         meta(classesExtensionPhase)
     }
 
-private val KtProperty.hasBackingField: Boolean
-    get() = hasInitializer()
-
-private val KtClass.nBackingFields: Int
-    get() {
-        val nCtorBackingFields = primaryConstructorParameters.size
-        val nPropsBackingFields = getProperties().count { it.hasBackingField }
-        return nCtorBackingFields + nPropsBackingFields
-    }
-
 private fun genFileContent(classPackage: String, className: String, shallowSize: Int): String {
-    val pack = if (classPackage.isNotRoot) "package $classPackage" else ""
-    val import = if (classPackage.isNotRoot) "import ${classPackage}.$className" else ""
+    val pack = if (classPackage.isNotRootPackage) "package $classPackage" else ""
+    val import = if (classPackage.isNotRootPackage) "import ${classPackage}.$className" else ""
     val def = """
         |val ${className}.shallowSize: Int
         |    get() = $shallowSize
     """.trimMargin()
     return listOf(pack, import, def).joinToString("\n\n")
 }
-
-private val String.isRoot: Boolean
-    get() = equals("<root>")
-
-private val String.isNotRoot: Boolean
-    get() = !isRoot

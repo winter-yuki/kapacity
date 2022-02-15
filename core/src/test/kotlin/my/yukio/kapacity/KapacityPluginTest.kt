@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class KapacityPluginTest {
-    private val fieldSize = 8
+    private val bytesInField = 8
 
     private fun compile(vararg sources: SourceFile): KotlinCompilation.Result =
         KotlinCompilation().apply {
@@ -36,11 +36,11 @@ class KapacityPluginTest {
     }
 
     private infix fun Int.fields(size: Int) {
-        assertEquals(this * fieldSize, size)
+        assertEquals(this * bytesInField, size)
     }
 
     /**
-     * Not infix because highlighting did not work for the infix syntax.
+     * Not infix because IDEA highlighting did not work for the infix syntax.
      */
     private fun Int.fields(@Language("kotlin") code: String) {
         val source = SourceFile.kotlin("File.kt", code)
