@@ -12,33 +12,31 @@ import java.io.File
 val Meta.addShallowSize: CliPlugin
     get() = "Add shallow size to the data classes" {
         val classesExtensionPhase = classDeclaration(this, { element.isData() }) {
-            val classPackage = value.classPackage
-            val outerClasses = value.outerClasses
-            val className = name?.identifier ?: error("Class name does not exist")
+            val segments = value.fqName?.pathSegments().orEmpty().map { it.identifier }
+            val prefixNames = segments.dropLast(1)
+            val className = segments.last()
             val bytesInField = 8
             val fileContent = genFileContent(
-                classPackage, outerClasses, className,
+                prefixNames, className,
                 value.nBackingFields * bytesInField
             )
             val file = fileContent.file(
                 fileName = "${className}.kt",
-                filePath = "generated${File.separatorChar}" + classPackage.plus(outerClasses)
-                    .joinToString(File.separatorChar.toString())
+                filePath = "generated${File.separatorChar}"
+                        + prefixNames.joinToString(File.separatorChar.toString())
             )
             Transform.newSources(file)
         }
         meta(classesExtensionPhase)
     }
 
-private fun genFileContent(
-    classPackage: List<String>, outerClasses: List<String>,
-    className: String, shallowSize: Int
-): String {
-    val pack = if (classPackage.plus(outerClasses).isEmpty()) null else "package ${classPackage.plus(outerClasses.map { it.lowercase() }).joinToString(".")}"
-    println("!!!!!!!!! = ${classPackage.plus(outerClasses.map { it.lowercase() })}")
+private fun genFileContent(prefixNames: List<String>, className: String, shallowSize: Int): String {
+    val pack =
+        if (prefixNames.isEmpty()) null
+        else "package ${prefixNames.joinToString(".") { it.lowercase() }}"
     val import =
-        if (outerClasses.isEmpty()) null
-        else "import ${classPackage.plus(outerClasses).joinToString(".")}.$className"
+        if (prefixNames.isEmpty()) null
+        else "import ${prefixNames.joinToString(".")}.$className"
     val def = """
         |val ${className}.shallowSize: Int
         |    get() = $shallowSize
@@ -46,24 +44,12 @@ private fun genFileContent(
     return listOfNotNull(pack, import, def).joinToString("\n\n")
 }
 
-val KtProperty.hasBackingField: Boolean
+private val KtProperty.hasBackingField: Boolean
     get() = hasInitializer()
 
-val KtClass.nBackingFields: Int
+private val KtClass.nBackingFields: Int
     get() {
         val nCtorBackingFields = primaryConstructorParameters.count { it.hasValOrVar() }
         val nPropsBackingFields = getProperties().count { it.hasBackingField }
         return nCtorBackingFields + nPropsBackingFields
     }
-
-val KtClass.classPackage: List<String>
-    get() = fqName?.pathSegments().orEmpty()
-        .map { it.identifier }
-        .takeWhile { it.first().isLowerCase() }
-
-val KtClass.outerClasses: List<String>
-    get() = fqName?.pathSegments().orEmpty()
-        .map { it.identifier }
-        .filter { it.first().isUpperCase() }
-        .dropLast(1)
-
