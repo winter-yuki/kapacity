@@ -1,6 +1,6 @@
 # Kapacity
 
-Kotlin compiler plugin that adds `shallowSize` extension to all data classes.
+Kotlin compiler plugin that adds `shallowSize` extension property to all data classes.
 
 ## Getting started
 
